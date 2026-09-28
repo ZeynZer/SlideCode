@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0d1117"><title>GestureCode</title>
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><b>Gesture<span>Code</span></b><button id="run">▶ Run</button></header>
+<main><div id="gut"></div><textarea id="ed" wrap="off" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+<pre id="out" hidden></pre></main>
+<section id="padwrap"><canvas id="pad"></canvas><p id="hint">Dessine ici · ◯ for · V if · → while · ↓ else · zigzag ✕</p></section>
+<nav><button id="undo">↶</button><button id="redo">↷</button><button id="bGest">Gestes</button><button id="bSet">⚙</button></nav>
+<div id="sheet" hidden><div class="card"><h3 id="sT"></h3><div id="sB"></div><button id="close">Fermer</button></div></div>
+<div id="toast"></div>
+<script src="app.js"></script></body></html>
