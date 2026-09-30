@@ -33,3 +33,13 @@ input{background:var(--bg);color:var(--t);border:1px solid var(--b);border-radiu
 .k{color:#ff7b72}.t{color:#79c0ff}.s{color:#a5d6ff}.c{color:#8b949e;font-style:italic}.n{color:#d2a8ff}
 #ot{margin:0;white-space:pre-wrap}#inrow{display:flex;gap:6px;margin-top:8px}#inrow input{flex:1;grid-column:auto}#oc{margin-top:8px;min-height:36px}
 #hapl{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;overflow:hidden}
+/* V4 — Encre et Signal */
+:root{--bg:#0E0F12;--p:#16181D;--b:#262932;--t:#E9E7E1;--m:#7C7F89;--a:#C6F135}
+header{background:transparent;border-bottom:0}header b{font:500 13px ui-monospace,monospace}
+button{border-radius:999px}#run{background:var(--a);color:#0E0F12;border:0;font-weight:500}
+#padwrap{background:#090A0D;border:.5px solid var(--b);border-radius:22px;overflow:hidden}
+#chip{position:absolute;left:12px;top:10px;padding:4px 12px;border-radius:999px;font-size:12px;border:.5px solid;opacity:0;transition:opacity .15s;pointer-events:none}#chip.on{opacity:1}
+nav{margin:6px 12px 10px;padding:6px;gap:4px;background:var(--p);border:.5px solid var(--b);border-radius:999px}
+nav button{border:0;background:transparent;min-height:48px}nav #bGest{background:var(--b)}
+.k{color:#C6F135}.t{color:#8FB8FF}.s{color:#F2B880}.n{color:#F08A7A}.c{color:#7C7F89}
+.card{border-top:.5px solid var(--b);border-radius:24px 24px 0 0}button.on{border-color:var(--a);color:var(--a)}#toast{color:#0E0F12}

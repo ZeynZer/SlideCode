@@ -7,3 +7,5 @@ Après modification des fichiers, incrémenter `V` dans sw.js.
 V2 : point = variable (type/nom/valeur) · zigzag horizontal ~~ = println · ƒ cursif (2 boucles) = fonction · ← return · ↑ commentaire · zigzag vertical/gribouillis = suppression · barre de symboles.
 
 V3 : Scanner (feuille variable + console interactive dans Run), else if/do-while/switch/case/try/catch/break/continue (panneau Gestes), modifier une variable existante, coloration, division entière simple, `public class Main`, calibrage des gestes (⚙), haptique iOS 17.4+ (interrupteur natif).
+
+V4 : DA Encre et Signal, trait néon (canvas), réglages d'apparence (couleur, couleur par geste, halo, effets réduits), haptique : 1 tick = reconnu, double tick = non reconnu.

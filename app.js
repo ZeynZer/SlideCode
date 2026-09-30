@@ -10,10 +10,13 @@ const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{retur
 const RE=/(\/\/.*)|("(?:[^"\\\n]|\\.)*"?)|\b(if|else|for|while|do|switch|case|break|continue|return|static|void|new|try|catch|class|public|private|final|import)\b|\b(int|long|double|float|boolean|char|String|Scanner|Exception)\b|\b(\d+(?:\.\d+)?L?)\b/g;
 function hl(t){let o='',i=0,m;const e=x=>x.replace(/&/g,'&amp;').replace(/</g,'&lt;');RE.lastIndex=0;
  while(m=RE.exec(t)){o+=e(t.slice(i,m.index));o+=`<span class="${m[1]?'c':m[2]?'s':m[3]?'k':m[4]?'t':'n'}">${e(m[0])}</span>`;i=RE.lastIndex}return o+e(t.slice(i))+'\n'}
-function haptic(ms=15){if(navigator.vibrate)navigator.vibrate(ms);else try{$('#hapl').click()}catch{}}   // iOS : interrupteur natif (iOS 17.4+)
+const OK=20,FAIL=[20,70,20];
+function haptic(p=15){if(navigator.vibrate){navigator.vibrate(p);return}
+ const c=()=>{try{$('#hapl').click()}catch{}};c();if(Array.isArray(p))setTimeout(c,p[0]+p[1])}   // iOS 17.4+ : interrupteur natif
 document.addEventListener('pointerdown',e=>{if(e.target.closest('button'))haptic(8)});
 const DP={turn:3.8,amp:24,st:.85,v:.4},HINT=$('#hint').textContent,CALK=['for','if','while','else','println','fn','delete'];
 let P=LS.get('gc.P',DP),cal=null;
+let LK=LS.get('gc.look',{c:'#C6F135',by:false,h:1,red:matchMedia('(prefers-reduced-motion:reduce)').matches});const saveLK=()=>LS.set('gc.look',LK);
 function calHint(){$('#hint').textContent=cal?`Calibrage : dessine « ${CALK[cal.i]} » (${cal.n+1}/3)`:HINT}
 function startCal(){cal={i:0,n:0,s:[]};$('#sheet').hidden=true;calHint()}
 function finishCal(){const S=cal.s,ok=Q=>S.filter(x=>classify(x.p,Q)===x.k).length,base=ok(P);let best=P,bs=base;
@@ -86,20 +89,36 @@ function classify(raw,Q=P){
  if(h>50&&w>40&&k>=p.length*.25&&k<=p.length*.75&&yk-f.y>Q.v*h&&yk-l.y>Q.v*h)return'if';
  return null;
 }
-// --- Gestes tactiles (pointer events + capture : le doigt peut sortir de la zone)
-let pts=null,t0=0;
-function fit(){const d=devicePixelRatio||1,r=pad.getBoundingClientRect();pad.width=r.width*d;pad.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);ctx.lineWidth=5;ctx.lineCap=ctx.lineJoin='round';ctx.strokeStyle='#58a6ff'}
+// --- Gestes tactiles + trait néon (canvas, actif seulement pendant le tracé et le fondu)
+const GC={for:'#C6F135',if:'#22E4FF',while:'#FF9F43',else:'#B48CFF',println:'#FF3DA5',fn:'#5EEAD4',delete:'#FF5A5A'};
+const GN={for:'for',if:'if',while:'while',else:'else',println:'println',fn:'fonction',delete:'supprimer'};
+let pts=null,t0=0,trail=[],fade=0,col=LK.c,raf=0,lastCl=0;
+function fit(){const d=devicePixelRatio||1,r=pad.getBoundingClientRect();pad.width=r.width*d;pad.height=r.height*d;ctx.setTransform(d,0,0,d,0,0);ctx.lineCap=ctx.lineJoin='round'}
 addEventListener('resize',fit);fit();
 const xy=e=>{const r=pad.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
-pad.addEventListener('pointerdown',e=>{pts=[xy(e)];t0=Date.now();pad.setPointerCapture(e.pointerId);ctx.clearRect(0,0,9999,9999);ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y)});
-pad.addEventListener('pointermove',e=>{if(!pts)return;const q=xy(e);pts.push(q);ctx.lineTo(q.x,q.y);ctx.stroke()});
-pad.addEventListener('pointercancel',()=>{pts=null;ctx.clearRect(0,0,9999,9999)});
-pad.addEventListener('pointerup',()=>{if(!pts)return;const p=pts;pts=null;
- setTimeout(()=>ctx.clearRect(0,0,9999,9999),200);
+function chip(k,raw){const c=$('#chip');if(!k){c.classList.remove('on');return}c.textContent=raw?k:GN[k];c.style.color=c.style.borderColor=col;c.style.background=col+'22';c.classList.add('on')}
+function paint(){
+ ctx.clearRect(0,0,pad.clientWidth,pad.clientHeight);let k=1;
+ if(!pts){k=1-(performance.now()-fade)/450;if(k<=0){trail=[];raf=0;return}}
+ const n=trail.length,hm=[.5,1,1.6][LK.h],L=LK.red?[[3,1,col]]:[[22*hm,.07,col],[13*hm,.14,col],[6,.55,col],[2.2,.9,'#fff']];
+ for(const[w,a,c]of L){ctx.lineWidth=w;ctx.strokeStyle=c;
+  for(let i=0;i<n-1;i+=7){ctx.globalAlpha=a*k*(.25+.75*i/n);ctx.beginPath();ctx.moveTo(trail[i].x,trail[i].y);for(let j=i+1;j<=Math.min(i+7,n-1);j++)ctx.lineTo(trail[j].x,trail[j].y);ctx.stroke()}}
+ if(pts&&n&&!LK.red){const h=trail[n-1];for(const[r,a,c]of[[18*hm,.12,col],[10,.35,col],[4,1,'#fff']]){ctx.globalAlpha=a;ctx.fillStyle=c;ctx.beginPath();ctx.arc(h.x,h.y,r,0,7);ctx.fill()}}
+ ctx.globalAlpha=1;raf=requestAnimationFrame(paint)}
+pad.addEventListener('pointerdown',e=>{pts=[xy(e)];trail=[pts[0]];col=LK.c;t0=Date.now();chip(null);pad.setPointerCapture(e.pointerId);cancelAnimationFrame(raf);raf=requestAnimationFrame(paint)});
+pad.addEventListener('pointermove',e=>{if(!pts)return;
+ for(const ev of(e.getCoalescedEvents?.()||[e])){const q=xy(ev),l=trail[trail.length-1];pts.push(q);if(Math.hypot(q.x-l.x,q.y-l.y)>2)trail.push(q)}
+ const now=performance.now();
+ if(now-lastCl>120&&pts.length>8){lastCl=now;const k=classify(pts);col=LK.by&&k?GC[k]:LK.c;chip(k)}});
+pad.addEventListener('pointercancel',()=>{pts=null;trail=[];chip(null)});
+pad.addEventListener('pointerup',()=>{if(!pts)return;const p=pts;pts=null;fade=performance.now();
  const dt=Date.now()-t0,far=Math.max(...p.map(q=>Math.hypot(q.x-p[0].x,q.y-p[0].y)));
  if(cal){if(far<14||dt<80)return;cal.s.push({k:CALK[cal.i],p});haptic(10);if(++cal.n==3){cal.i++;cal.n=0}cal.i>=CALK.length?finishCal():calHint();return}
- if(far<14){if(dt<400){haptic(15);varSheet()}return}   // point = variable
- if(dt<80)return;const k=classify(p);if(!k)return toast('Geste non reconnu');haptic(15);act(k)});
+ if(far<14){trail=[];if(dt<400){haptic(OK);varSheet()}return}   // point = variable
+ if(dt<80){trail=[];return}
+ const k=classify(p);
+ if(!k){col='#FF5A5A';chip('non reconnu',1);haptic(FAIL);setTimeout(()=>chip(null),700);return}   // double vibration
+ col=LK.by?GC[k]:LK.c;chip(k);haptic(OK);setTimeout(()=>chip(null),450);act(k)});           // vibration simple
 // --- Shake = Undo
 let last=0,prev=null;
 function onMotion(e){const a=e.accelerationIncludingGravity;if(!a)return;const m=Math.hypot(a.x||0,a.y||0,a.z||0),d=prev==null?0:Math.abs(m-prev);prev=m;const n=Date.now();
@@ -153,9 +172,9 @@ $('#bGest').onclick=()=>sheet('Gestes',`<p>Tape pour insérer sans dessiner.</p>
  <button data-a="comment">↑ commentaire</button><button data-a="delete">✕ suppr. bloc</button>
  <h4>Structures (boutons)</h4><button data-a="elseif">else if</button><button data-a="dowhile">do … while</button><button data-a="switch">switch</button><button data-a="case">case</button>
  <button data-a="try">try</button><button data-a="catch">catch</button><button data-a="break">break</button><button data-a="continue">continue</button>`);
-$('#bSet').onclick=()=>{const fl=Object.keys(files);if(!fl.includes(cur))fl.push(cur);
+const openSet=()=>{const fl=Object.keys(files);if(!fl.includes(cur))fl.push(cur);
  sheet('Réglages',`<button data-a="new">Nouveau fichier</button><button data-a="save">Sauvegarder</button><button data-a="clear">Effacer</button><button data-a="export">Exporter .java</button><button data-a="cal">Calibrer les gestes</button><button data-a="calreset">Reset calibrage</button>
- <button data-a="shake" style="grid-column:1/-1">Secousse = Undo : ${LS.get('gc.shake',false)?'ON':'OFF'}</button><h4>Fichiers</h4>`+fl.map(f=>`<button data-o="${f}" style="grid-column:1/-1">${f===cur?'● ':''}${f}</button>`).join(''))};
+ <button data-a="shake" style="grid-column:1/-1">Secousse = Undo : ${LS.get('gc.shake',false)?'ON':'OFF'}</button>${lookHTML()}<h4>Fichiers</h4>`+fl.map(f=>`<button data-o="${f}" style="grid-column:1/-1">${f===cur?'● ':''}${f}</button>`).join(''))};
 $('#sB').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a,o=b.dataset.o;
  if((a in TPL||a in LINE||a==='delete')){$('#sheet').hidden=true;act(a)}
  else if(a==='new'){const n=prompt('Nom du fichier','prog'+Object.keys(files).length+'.java');if(n){save();cur=n;ed.value='';files[cur]='';H=[snap('Début')];hi=0;refresh();save();$('#sheet').hidden=true}}
@@ -182,6 +201,10 @@ function varSheet(keep){if(!keep)vs={t:'int',n:freeName(),v:'0',sc:false,m:null}
  +(dv.length?'<h4>Ou modifier une variable existante</h4>'+dv.map(n=>`<button data-m="${n}" class="${vs.m===n?'on':''}">${n}</button>`).join('')
   +(vs.m?OPS.map(o=>`<button data-op="${o}">${vs.m} ${o}</button>`).join(''):''):''))}
 $('#sB').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
+ if(d.c){LK.c=d.c;LK.by=false;saveLK();return openSet()}
+ if(d.a==='by'){LK.by=!LK.by;saveLK();return openSet()}
+ if(d.a==='halo'){LK.h=(LK.h+1)%3;saveLK();return openSet()}
+ if(d.a==='red'){LK.red=!LK.red;saveLK();return openSet()}
  if(d.a==='var')return varSheet();
  if(d.a==='cal')return startCal();
  if(d.a==='calreset'){P=DP;LS.set('gc.P',P);return toast('Calibrage réinitialisé')}
@@ -200,6 +223,12 @@ for(const k of KEYS){const b=document.createElement('button');b.textContent=k;$(
 $('#keys').addEventListener('pointerdown',e=>e.preventDefault());
 $('#keys').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const k=b.textContent,p=ed.selectionStart;
  ed.setRangeText(k,p,ed.selectionEnd,'end');if(PAIR.includes(k))ed.setSelectionRange(p+1,p+1);ed.dispatchEvent(new Event('input'))});
+$('#bSet').onclick=openSet;
+function lookHTML(){return'<h4>Apparence du trait</h4>'+[['#C6F135','lime'],['#22E4FF','cyan'],['#FF3DA5','magenta']].map(([c,n])=>`<button data-c="${c}" style="color:${c}" class="${!LK.by&&LK.c===c?'on':''}">${n}</button>`).join('')
+ +`<label style="grid-column:1/-1;display:flex;align-items:center;gap:10px;color:var(--m)">Couleur libre<input type="color" id="ccol" value="${LK.c}" style="flex:1;min-height:44px;padding:2px"></label>`
+ +`<button data-a="by" class="${LK.by?'on':''}">Couleur par geste : ${LK.by?'ON':'OFF'}</button><button data-a="halo">Halo : ${['sobre','normal','néon'][LK.h]}</button>`
+ +`<button data-a="red" class="${LK.red?'on':''}" style="grid-column:1/-1">Effets réduits : ${LK.red?'ON':'OFF'}</button>`}
+$('#sB').addEventListener('input',e=>{if(e.target.id==='ccol'){LK.c=e.target.value;LK.by=false;saveLK()}});
 $('#undo').onclick=undo;$('#redo').onclick=redo;
 if(LS.get('gc.shake',false)&&typeof DeviceMotionEvent?.requestPermission!=='function')setShake(true); // iOS : permission = geste utilisateur requis
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
