@@ -2,14 +2,28 @@
 const $=s=>document.querySelector(s),ed=$('#ed'),gut=$('#gut'),pad=$('#pad'),ctx=pad.getContext('2d');
 const IND='    ';
 // --- Modèle de structures : « » marque la sélection après insertion (extensible : nouveaux gestes = nouvelle entrée)
-const TPL={for:'for (int i = 0; i < «10»; i++) {',if:'if («condition») {',while:'while («condition») {',else:'else {',fn:'static void «maFonction»() {'};
-const LINE={println:'System.out.println(«"texte"»);',ret:'return «0»;',comment:'// «commentaire»'};
+const TPL={for:'for (int i = 0; i < «10»; i++) {',if:'if («condition») {',while:'while («condition») {',else:'else {',elseif:'else if («condition») {',dowhile:'do {',switch:'switch («x») {',try:'try {',catch:'catch (Exception «e») {',fn:'static void «maFonction»() {'};
+const TAIL={dowhile:'} while («condition»);'},FUSE=['else','elseif','catch'];
+const LINE={println:'System.out.println(«"texte"»);',ret:'return «0»;',comment:'// «commentaire»',break:'break;',continue:'continue;',case:'case «1»:'};
 const LS={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+// --- Coloration, haptique, calibrage (paramètres des seuils)
+const RE=/(\/\/.*)|("(?:[^"\\\n]|\\.)*"?)|\b(if|else|for|while|do|switch|case|break|continue|return|static|void|new|try|catch|class|public|private|final|import)\b|\b(int|long|double|float|boolean|char|String|Scanner|Exception)\b|\b(\d+(?:\.\d+)?L?)\b/g;
+function hl(t){let o='',i=0,m;const e=x=>x.replace(/&/g,'&amp;').replace(/</g,'&lt;');RE.lastIndex=0;
+ while(m=RE.exec(t)){o+=e(t.slice(i,m.index));o+=`<span class="${m[1]?'c':m[2]?'s':m[3]?'k':m[4]?'t':'n'}">${e(m[0])}</span>`;i=RE.lastIndex}return o+e(t.slice(i))+'\n'}
+function haptic(ms=15){if(navigator.vibrate)navigator.vibrate(ms);else try{$('#hapl').click()}catch{}}   // iOS : interrupteur natif (iOS 17.4+)
+document.addEventListener('pointerdown',e=>{if(e.target.closest('button'))haptic(8)});
+const DP={turn:3.8,amp:24,st:.85,v:.4},HINT=$('#hint').textContent,CALK=['for','if','while','else','println','fn','delete'];
+let P=LS.get('gc.P',DP),cal=null;
+function calHint(){$('#hint').textContent=cal?`Calibrage : dessine « ${CALK[cal.i]} » (${cal.n+1}/3)`:HINT}
+function startCal(){cal={i:0,n:0,s:[]};$('#sheet').hidden=true;calHint()}
+function finishCal(){const S=cal.s,ok=Q=>S.filter(x=>classify(x.p,Q)===x.k).length,base=ok(P);let best=P,bs=base;
+ for(const turn of[3,3.4,3.8,4.4])for(const amp of[16,24,32])for(const st of[.75,.85,.92])for(const v of[.3,.4,.5]){const Q={turn,amp,st,v},n=ok(Q);if(n>bs){bs=n;best=Q}}
+ P=best;LS.set('gc.P',P);cal=null;calHint();toast(`Calibré : ${base}→${bs}/${S.length} reconnus`)}
 let files=LS.get('gc.files',{}),cur=LS.get('gc.cur','main.java');
 ed.value=files[cur]??'int x = 10;\n\n';
 // --- Toast / UI
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),1200)}
-function refresh(){const n=ed.value.split('\n').length;gut.textContent=Array.from({length:n},(_,i)=>i+1).join('\n');gut.scrollTop=ed.scrollTop}
+function refresh(){$('#hl').innerHTML=hl(ed.value);const n=ed.value.split('\n').length;gut.textContent=Array.from({length:n},(_,i)=>i+1).join('\n');gut.scrollTop=ed.scrollTop}
 function save(){files[cur]=ed.value;LS.set('gc.files',files);LS.set('gc.cur',cur)}
 // --- Historique
 let H=[],hi=-1,pending=false,tmr;
@@ -20,7 +34,7 @@ function undo(){if(pending)commit('Modification');if(hi<=0)return toast('Rien à
 function redo(){if(hi>=H.length-1)return toast('Rien à rétablir');restore(H[++hi]);toast('Rétabli : '+H[hi].l)}
 H=[snap('Début')];hi=0;refresh();
 ed.addEventListener('input',()=>{pending=true;refresh();clearTimeout(tmr);tmr=setTimeout(()=>commit('Modification'),700)});
-ed.addEventListener('scroll',()=>gut.scrollTop=ed.scrollTop);
+ed.addEventListener('scroll',()=>{gut.scrollTop=ed.scrollTop;$('#hl').scrollTop=ed.scrollTop;$('#hl').scrollLeft=ed.scrollLeft});
 ed.addEventListener('beforeinput',e=>{if(e.inputType!=='insertLineBreak')return;e.preventDefault();
  const v=ed.value,p=ed.selectionStart,ls=v.lastIndexOf('\n',p-1)+1,line=v.slice(ls,p);
  const ind=line.match(/^\s*/)[0]+(line.trimEnd().endsWith('{')?IND:'');ed.setRangeText('\n'+ind,p,ed.selectionEnd,'end');ed.dispatchEvent(new Event('input'))});
@@ -29,12 +43,12 @@ function put(text,block,kind){
  const v=ed.value,p=ed.selectionStart,ls=v.lastIndexOf('\n',p-1)+1;let le=v.indexOf('\n',p);if(le<0)le=v.length;
  const line=v.slice(ls,le),ws=line.match(/^\s*/)[0];let before,after,ind,head=text;
  if(!line.trim()){before=v.slice(0,ls);after=v.slice(le);ind=ws;
-  if(kind==='else'&&ls>0){const ps=v.lastIndexOf('\n',ls-2)+1,pl=v.slice(ps,ls-1);if(pl.trim()==='}'){before=v.slice(0,ps);ind=pl.match(/^\s*/)[0];head='} else {'}}}
- else if(kind==='else'&&line.trim()==='}'){before=v.slice(0,ls);after=v.slice(le);ind=ws;head='} else {'}
+  if(FUSE.includes(kind)&&ls>0){const ps=v.lastIndexOf('\n',ls-2)+1,pl=v.slice(ps,ls-1);if(pl.trim()==='}'){before=v.slice(0,ps);ind=pl.match(/^\s*/)[0];head='} '+text}}}
+ else if(FUSE.includes(kind)&&line.trim()==='}'){before=v.slice(0,ls);after=v.slice(le);ind=ws;head='} '+text}
  else{before=v.slice(0,le)+'\n';after=v.slice(le);ind=ws+(line.trimEnd().endsWith('{')?IND:'')}
- head=ind+head;let a=head.indexOf('«'),b=a;
- if(a>=0){head=head.replace('«','');b=head.indexOf('»');head=head.replace('»','')}
- const body=ind+IND,txt=block?head+'\n'+body+'\n'+ind+'}':head;
+ head=ind+head.replace(/\n/g,'\n'+ind);const body=ind+IND;
+ let txt=block?head+'\n'+body+'\n'+ind+(TAIL[kind]||'}'):head;
+ let a=txt.indexOf('«');txt=txt.replace('«','');let b=a>=0?txt.indexOf('»'):-1;txt=txt.replace('»','');
  if(a<0)a=b=block?head.length+1+body.length:head.length;
  ed.value=before+txt+after;ed.focus({preventScroll:true});ed.setSelectionRange(before.length+a,before.length+b);
 }
@@ -49,7 +63,7 @@ function delBlock(){
 }
 const act=k=>k==='delete'?delBlock():insert(k);
 // --- Reconnaissance géométrique locale
-function classify(raw){
+function classify(raw,Q=P){
  const p=[raw[0]];for(const q of raw){const l=p[p.length-1];if(Math.hypot(q.x-l.x,q.y-l.y)>=10)p.push(q)}
  if(p.length<4)return null;let len=0;const seg=[];
  for(let i=1;i<p.length;i++){const dx=p[i].x-p[i-1].x,dy=p[i].y-p[i-1].y;len+=Math.hypot(dx,dy);seg.push(Math.atan2(dy,dx))}
@@ -57,19 +71,19 @@ function classify(raw){
  for(let i=1;i<seg.length;i++){let d=seg[i]-seg[i-1];while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;turn+=d}
  const f=p[0],l=p[p.length-1],dx=l.x-f.x,dy=l.y-f.y,ys=p.map(q=>q.y),xs=p.map(q=>q.x);
  const w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
- const revs=a=>{let r=0,d=0,ref=a[0];for(const x of a){const e=x-ref;if(d<=0&&e>24){if(d<0)r++;d=1;ref=x}else if(d>=0&&e<-24){if(d>0)r++;d=-1;ref=x}else if((d>0&&x>ref)||(d<0&&x<ref))ref=x}return r};
+ const revs=a=>{let r=0,d=0,ref=a[0];for(const x of a){const e=x-ref;if(d<=0&&e>Q.amp){if(d<0)r++;d=1;ref=x}else if(d>=0&&e<-Q.amp){if(d>0)r++;d=-1;ref=x}else if((d>0&&x>ref)||(d<0&&x<ref))ref=x}return r};
  const o=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x),X=(a,b,c,d)=>o(a,b,c)*o(a,b,d)<0&&o(c,d,a)*o(c,d,b)<0;
  let cr=0;for(let i=0;i<p.length-1;i++)for(let j=i+3;j<p.length-1;j++)if(X(p[i],p[i+1],p[j],p[j+1]))cr++;
  const rx=revs(xs),ry=revs(ys);
  if(cr>=2&&h>=1.2*w&&rx<=2)return'fn';            // f cursif : 2 boucles (haut et bas)
- if(Math.abs(turn)>3.8)return'for';
+ if(Math.abs(turn)>Q.turn)return'for';
  if(ry>=3&&rx<3&&w>h)return'println';              // zigzag horizontal
  if(rx>=3)return'delete';                           // zigzag vertical / gribouillis
- if(Math.hypot(dx,dy)/len>0.85){
+ if(Math.hypot(dx,dy)/len>Q.st){
   if(Math.abs(dx)>2*Math.abs(dy))return dx>0?'while':'ret';
   if(Math.abs(dy)>2*Math.abs(dx))return dy>0?'else':'comment';return null}
  const k=ys.indexOf(Math.max(...ys)),yk=ys[k];
- if(h>50&&w>40&&k>=p.length*.25&&k<=p.length*.75&&yk-f.y>.4*h&&yk-l.y>.4*h)return'if';
+ if(h>50&&w>40&&k>=p.length*.25&&k<=p.length*.75&&yk-f.y>Q.v*h&&yk-l.y>Q.v*h)return'if';
  return null;
 }
 // --- Gestes tactiles (pointer events + capture : le doigt peut sortir de la zone)
@@ -83,39 +97,64 @@ pad.addEventListener('pointercancel',()=>{pts=null;ctx.clearRect(0,0,9999,9999)}
 pad.addEventListener('pointerup',()=>{if(!pts)return;const p=pts;pts=null;
  setTimeout(()=>ctx.clearRect(0,0,9999,9999),200);
  const dt=Date.now()-t0,far=Math.max(...p.map(q=>Math.hypot(q.x-p[0].x,q.y-p[0].y)));
- if(far<14){if(dt<400){navigator.vibrate?.(15);varSheet()}return}   // point = variable
- if(dt<80)return;const k=classify(p);if(!k)return toast('Geste non reconnu');navigator.vibrate?.(15);act(k)});
+ if(cal){if(far<14||dt<80)return;cal.s.push({k:CALK[cal.i],p});haptic(10);if(++cal.n==3){cal.i++;cal.n=0}cal.i>=CALK.length?finishCal():calHint();return}
+ if(far<14){if(dt<400){haptic(15);varSheet()}return}   // point = variable
+ if(dt<80)return;const k=classify(p);if(!k)return toast('Geste non reconnu');haptic(15);act(k)});
 // --- Shake = Undo
 let last=0,prev=null;
 function onMotion(e){const a=e.accelerationIncludingGravity;if(!a)return;const m=Math.hypot(a.x||0,a.y||0,a.z||0),d=prev==null?0:Math.abs(m-prev);prev=m;const n=Date.now();
- if(d>14&&n-last>1200){last=n;undo();navigator.vibrate?.(30)}}
+ if(d>14&&n-last>1200){last=n;undo();haptic(30)}}
 async function setShake(on){
  if(!on){removeEventListener('devicemotion',onMotion);LS.set('gc.shake',false);return true}
  if(typeof DeviceMotionEvent==='undefined'){toast('Secousse non supportée : utilise ↶');return false}
  try{if(typeof DeviceMotionEvent.requestPermission==='function'&&await DeviceMotionEvent.requestPermission()!=='granted'){toast('Permission refusée');return false}}catch{toast('Permission indisponible');return false}
  addEventListener('devicemotion',onMotion);LS.set('gc.shake',true);return true}
 // --- Exécution (sous-ensemble Java → JS dans un Worker, timeout 3 s). Point d'extension : RUNNERS
-const RUNNERS={java(src){let s=src.replace(/System\.out\.print(ln)?\s*\(/g,(m,l)=>l?'println(':'print(')
- .replace(/\b(?:public\s+|private\s+)?static\s+[\w<>\[\]]+\s+(\w+)\s*\(([^)]*)\)/g,(m,n,a)=>'function '+n+'('+a.split(',').map(x=>x.trim().split(/\s+/).pop()).filter(Boolean).join(',')+')')
- .replace(/\b(?:int|long|double|float|boolean|String|char)\s+(?=[A-Za-z_]\w*\s*(?:=|;|,))/g,'let ');
- if(/function main\(/.test(s))s+='\nmain();';return s}};
-$('#run').onclick=()=>{const o=$('#out');o.hidden=false;o.textContent='…';let js;
- try{js=RUNNERS.java(ed.value)}catch(e){o.textContent=e;return}
- const code=`let o='';const print=s=>{o+=s},println=s=>{o+=s+'\\n'};try{${js}}catch(e){o+='\\nErreur: '+e.message}postMessage(o)`;
- const w=new Worker(URL.createObjectURL(new Blob([code])));
- const to=setTimeout(()=>{w.terminate();o.textContent='Timeout (boucle infinie ?)'},3000);
- w.onmessage=e=>{clearTimeout(to);o.textContent=e.data||'(aucune sortie)';w.terminate()};
- w.onerror=e=>{clearTimeout(to);o.textContent='Erreur: '+e.message;w.terminate()};
- o.onclick=()=>o.hidden=true};
+// --- Java (sous-ensemble) → JS async : classes, static, Scanner, division entière simple (a / b)
+function toJS(src){
+ let s=src.replace(/^\s*import\s[^;]+;/gm,'');
+ const m=/(?:public\s+)?(?:final\s+)?class\s+\w+\s*\{/.exec(s);
+ if(m){let d=1,i=m.index+m[0].length;for(;i<s.length&&d;i++){if(s[i]==='{')d++;else if(s[i]==='}')d--}s=s.slice(0,m.index)+s.slice(m.index+m[0].length,i-1)+s.slice(i)}
+ const ints=new Set(),fns=[];
+ s=s.replace(/\b(?:public\s+|private\s+)?static\s+[\w<>\[\]]+\s+(\w+)\s*\(([^)]*)\)/g,(x,n,a)=>{fns.push(n);return'async function '+n+'('+a.split(',').map(z=>{z=z.trim().split(/\s+/);if(/^(int|long)$/.test(z[0])&&z[1])ints.add(z[1]);return z.pop()}).filter(Boolean).join(',')+')'});
+ for(const r of s.matchAll(/\b(?:int|long)\s+(\w+)/g))ints.add(r[1]);
+ s=s.replace(/System\.out\.print(ln)?\s*\(/g,(x,l)=>l?'println(':'print(')
+  .replace(/\bScanner\s+(\w+)\s*=\s*new\s+Scanner\s*\(\s*System\.in\s*\)/g,'let $1=new Sc()')
+  .replace(/\b(\w+)\.(nextInt|nextLong|nextDouble|nextBoolean|nextLine|next)\(\)/g,'(await $1.$2())')
+  .replace(/\b(?:static|final)\s+/g,'')
+  .replace(/\b(?:int|long|double|float|boolean|String|char)\s+(?=[A-Za-z_]\w*\s*(?:=|;|,))/g,'let ')
+  .replace(/(?<![\w.])([A-Za-z_]\w*|\d+)\s*\/\s*([A-Za-z_]\w*|\d+)(?![\w.(])/g,(x,a,b)=>{const I=t=>/^\d+$/.test(t)||ints.has(t);return I(a)&&I(b)?`Math.trunc(${a}/${b})`:x});
+ for(const n of fns)s=s.replace(new RegExp('(?<!function )\\b'+n+'\\s*\\(','g'),'await '+n+'(');
+ if(fns.includes('main'))s+='\nawait main();';return s
+}
+const RUNNERS={java:toJS};
+let send=null;
+$('#run').onclick=()=>{const o=$('#out'),ot=$('#ot'),ir=$('#inrow');o.hidden=false;ot.textContent='';ir.hidden=true;let js;
+ try{js=RUNNERS.java(ed.value)}catch(e){ot.textContent=e;return}
+ const code=`let res;onmessage=e=>res&&res(e.data);const read=()=>new Promise(r=>{res=r;postMessage({ask:1})});
+const print=s=>postMessage({o:String(s)}),println=(s='')=>postMessage({o:s+'\\n'});
+class Sc{constructor(){this.t=[]}async nextLine(){if(this.t.length){const r=this.t.join(' ');this.t=[];return r}return await read()}
+async next(){while(!this.t.length)this.t=(await read()).split(/\\s+/).filter(Boolean);return this.t.shift()}
+async nextInt(){return parseInt(await this.next())}async nextLong(){return parseInt(await this.next())}async nextDouble(){return parseFloat(await this.next())}async nextBoolean(){return (await this.next())==='true'}}
+(async()=>{try{${js}}catch(e){postMessage({o:'\\nErreur: '+e.message})}postMessage({done:1})})()`;
+ const w=new Worker(URL.createObjectURL(new Blob([code]))),add=t=>ot.textContent+=t;let to;
+ const arm=()=>{clearTimeout(to);to=setTimeout(()=>{w.terminate();add('\nTimeout (boucle infinie ?)');ir.hidden=true},5000)};arm();
+ w.onmessage=e=>{const d=e.data;if(d.o!=null)add(d.o);if(d.ask){clearTimeout(to);ir.hidden=false;$('#cin').value='';$('#cin').focus()}if(d.done){clearTimeout(to);add('\n— fin —');w.terminate()}};
+ w.onerror=e=>{clearTimeout(to);add('\nErreur: '+e.message);w.terminate()};
+ send=()=>{const v=$('#cin').value;add(v+'\n');ir.hidden=true;w.postMessage(v);arm()};
+ $('#oc').onclick=()=>{w.terminate();clearTimeout(to);o.hidden=true}};
+$('#cgo').onclick=()=>send&&send();$('#cin').addEventListener('keydown',e=>{if(e.key==='Enter')send&&send()});
 // --- Feuilles (Gestes / Réglages)
 function sheet(title,html){$('#sT').textContent=title;$('#sB').innerHTML=html;$('#sheet').hidden=false}
 $('#close').onclick=()=>$('#sheet').hidden=true;
 $('#bGest').onclick=()=>sheet('Gestes',`<p>Tape pour insérer sans dessiner.</p>
  <button data-a="for">◯ for</button><button data-a="if">V if</button><button data-a="while">→ while</button><button data-a="else">↓ else</button>
  <button data-a="println">~~ println</button><button data-a="var">• variable</button><button data-a="fn">ƒ fonction</button><button data-a="ret">← return</button>
- <button data-a="comment">↑ commentaire</button><button data-a="delete">✕ suppr. bloc</button>`);
+ <button data-a="comment">↑ commentaire</button><button data-a="delete">✕ suppr. bloc</button>
+ <h4>Structures (boutons)</h4><button data-a="elseif">else if</button><button data-a="dowhile">do … while</button><button data-a="switch">switch</button><button data-a="case">case</button>
+ <button data-a="try">try</button><button data-a="catch">catch</button><button data-a="break">break</button><button data-a="continue">continue</button>`);
 $('#bSet').onclick=()=>{const fl=Object.keys(files);if(!fl.includes(cur))fl.push(cur);
- sheet('Réglages',`<button data-a="new">Nouveau fichier</button><button data-a="save">Sauvegarder</button><button data-a="clear">Effacer</button><button data-a="export">Exporter .java</button>
+ sheet('Réglages',`<button data-a="new">Nouveau fichier</button><button data-a="save">Sauvegarder</button><button data-a="clear">Effacer</button><button data-a="export">Exporter .java</button><button data-a="cal">Calibrer les gestes</button><button data-a="calreset">Reset calibrage</button>
  <button data-a="shake" style="grid-column:1/-1">Secousse = Undo : ${LS.get('gc.shake',false)?'ON':'OFF'}</button><h4>Fichiers</h4>`+fl.map(f=>`<button data-o="${f}" style="grid-column:1/-1">${f===cur?'● ':''}${f}</button>`).join(''))};
 $('#sB').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a,o=b.dataset.o;
  if((a in TPL||a in LINE||a==='delete')){$('#sheet').hidden=true;act(a)}
@@ -125,22 +164,36 @@ $('#sB').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const
  else if(a==='export'){const u=URL.createObjectURL(new Blob([ed.value],{type:'text/plain'})),l=document.createElement('a');l.href=u;l.download=cur;l.click();setTimeout(()=>URL.revokeObjectURL(u),1e3)}
  else if(a==='shake'){const on=!LS.get('gc.shake',false);if(await setShake(on))b.textContent='Secousse = Undo : '+(on?'ON':'OFF')}
  else if(o){save();cur=o;ed.value=files[o]??'';H=[snap('Début')];hi=0;refresh();save();$('#sheet').hidden=true}};
-// --- Variable (point) : type, nom libre, valeur prédéfinie ou libre
+// --- Variable (point) : type, nom libre, valeur ou Scanner ; ou modification d'une variable existante
 const VALS={int:['0','1','10','-1'],double:['0.0','1.5'],String:['""','"texte"'],boolean:['true','false'],long:['0L','1L'],char:["'a'"]};
-let vs=null;
+const SCAN={int:'sc.nextInt()',long:'sc.nextLong()',double:'sc.nextDouble()',boolean:'sc.nextBoolean()',String:'sc.nextLine()',char:'sc.next().charAt(0)'};
+const OPS=['++','--','+=','-=','*=','/=','='];let vs=null;
+const esc=x=>x.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function declared(){const r=new Set();for(const m of ed.value.matchAll(/\b(?:int|long|double|boolean|String|char)\s+([A-Za-z_]\w*)\s*[=;,]/g))r.add(m[1]);return[...r]}
 function freeName(){const c=ed.value;for(const l of 'abcdefghijklmnopqrstuvwxyz')if(!new RegExp('\\b'+l+'\\b').test(c))return l;let i=1;while(new RegExp('\\ba'+i+'\\b').test(c))i++;return'a'+i}
-function varSheet(keep){if(!keep)vs={t:'int',n:freeName(),v:'0'};
- sheet('Nouvelle variable','<h4>Type</h4>'+Object.keys(VALS).map(t=>`<button data-t="${t}" class="${vs.t===t?'on':''}">${t}</button>`).join('')
- +`<h4>Nom</h4><input id="vn" value="${vs.n}" autocapitalize="off" autocomplete="off"><h4>Valeur</h4>`
- +VALS[vs.t].map(v=>`<button data-v="${encodeURIComponent(v)}" class="${vs.v===v?'on':''}">${v.replace(/</g,'&lt;')}</button>`).join('')
- +`<input id="vv" placeholder="autre valeur…" value="${VALS[vs.t].includes(vs.v)?'':vs.v.replace(/"/g,'&quot;')}">`
- +`<button data-a="varok" style="grid-column:1/-1;background:#238636">Insérer : ${vs.t} ${vs.n} = ${vs.v.replace(/</g,'&lt;')}</button>`)}
-$('#sB').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
- if(b.dataset.a==='var')return varSheet();if(!vs)return;
+function varSheet(keep){if(!keep)vs={t:'int',n:freeName(),v:'0',sc:false,m:null};
+ const val=vs.sc?SCAN[vs.t]:vs.v,dv=declared();
+ sheet('Variable','<h4>Type</h4>'+Object.keys(VALS).map(t=>`<button data-t="${t}" class="${vs.t===t?'on':''}">${t}</button>`).join('')
+ +`<h4>Nom</h4><input id="vn" value="${esc(vs.n)}" autocapitalize="off" autocomplete="off">`
+ +(vs.sc?'':'<h4>Valeur</h4>'+VALS[vs.t].map(v=>`<button data-v="${encodeURIComponent(v)}" class="${vs.v===v?'on':''}">${esc(v)}</button>`).join('')
+  +`<input id="vv" placeholder="autre valeur…" value="${VALS[vs.t].includes(vs.v)?'':esc(vs.v)}">`)
+ +`<button data-a="sc" class="${vs.sc?'on':''}" style="grid-column:1/-1">⌨ Saisie clavier (Scanner) : ${vs.sc?'ON':'OFF'}</button>`
+ +`<button data-a="varok" style="grid-column:1/-1;background:#238636">Insérer : ${esc(vs.t+' '+vs.n+' = '+val)}</button>`
+ +(dv.length?'<h4>Ou modifier une variable existante</h4>'+dv.map(n=>`<button data-m="${n}" class="${vs.m===n?'on':''}">${n}</button>`).join('')
+  +(vs.m?OPS.map(o=>`<button data-op="${o}">${vs.m} ${o}</button>`).join(''):''):''))}
+$('#sB').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;
+ if(d.a==='var')return varSheet();
+ if(d.a==='cal')return startCal();
+ if(d.a==='calreset'){P=DP;LS.set('gc.P',P);return toast('Calibrage réinitialisé')}
+ if(!vs)return;
  const n=$('#vn'),c=$('#vv');if(n&&n.value.trim())vs.n=n.value.trim();if(c&&c.value.trim())vs.v=c.value.trim();
- if(b.dataset.t){vs.t=b.dataset.t;vs.v=VALS[vs.t][0];varSheet(1)}
- else if(b.dataset.v){vs.v=decodeURIComponent(b.dataset.v);varSheet(1)}
- else if(b.dataset.a==='varok'){$('#sheet').hidden=true;put(`${vs.t} ${vs.n} = ${vs.v};`,false);commit('Variable '+vs.n);vs=null}});
+ if(d.t){vs.t=d.t;vs.v=VALS[vs.t][0];varSheet(1)}
+ else if(d.v){vs.v=decodeURIComponent(d.v);varSheet(1)}
+ else if(d.a==='sc'){vs.sc=!vs.sc;varSheet(1)}
+ else if(d.m){vs.m=d.m;varSheet(1)}
+ else if(d.op){$('#sheet').hidden=true;put(d.op==='++'||d.op==='--'?`${vs.m}${d.op};`:`${vs.m} ${d.op} «1»;`,false);commit('Modification de '+vs.m);vs=null}
+ else if(d.a==='varok'){$('#sheet').hidden=true;const need=vs.sc&&!/\bScanner\s+sc\b/.test(ed.value);
+  put((need?'Scanner sc = new Scanner(System.in);\n':'')+`${vs.t} ${vs.n} = ${vs.sc?SCAN[vs.t]:vs.v};`,false);commit('Variable '+vs.n);vs=null}});
 // --- Barre de symboles (ne vole pas le focus du clavier)
 const KEYS=['()','{}','[]','""',';','=','.',',','+','-','*','/','<','>','!','&&','||','=='],PAIR=['()','{}','[]','""'];
 for(const k of KEYS){const b=document.createElement('button');b.textContent=k;$('#keys').append(b)}

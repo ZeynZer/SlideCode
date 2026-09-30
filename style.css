@@ -25,3 +25,11 @@ nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:6px 10px 10
 button.on{border-color:var(--a);color:var(--a)}
 input{background:var(--bg);color:var(--t);border:1px solid var(--b);border-radius:10px;min-height:48px;padding:0 12px;font:inherit;grid-column:1/-1}
 #hint{font-size:11px;padding:0 8px}
+#wrap{position:relative;flex:1;min-width:0}
+#hl,#ed{position:absolute;inset:0;margin:0;padding:10px;font:14px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre;tab-size:4;border:0;letter-spacing:0}
+#hl{overflow:hidden;pointer-events:none;color:var(--t)}
+#ed{color:transparent;-webkit-text-fill-color:transparent;caret-color:var(--a);background:transparent;overflow:auto}
+#ed::selection{background:#58a6ff55;-webkit-text-fill-color:transparent}
+.k{color:#ff7b72}.t{color:#79c0ff}.s{color:#a5d6ff}.c{color:#8b949e;font-style:italic}.n{color:#d2a8ff}
+#ot{margin:0;white-space:pre-wrap}#inrow{display:flex;gap:6px;margin-top:8px}#inrow input{flex:1;grid-column:auto}#oc{margin-top:8px;min-height:36px}
+#hapl{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;overflow:hidden}
