@@ -43,3 +43,9 @@ nav{margin:6px 12px 10px;padding:6px;gap:4px;background:var(--p);border:.5px sol
 nav button{border:0;background:transparent;min-height:48px}nav #bGest{background:var(--b)}
 .k{color:#C6F135}.t{color:#8FB8FF}.s{color:#F2B880}.n{color:#F08A7A}.c{color:#7C7F89}
 .card{border-top:.5px solid var(--b);border-radius:24px 24px 0 0}button.on{border-color:var(--a);color:var(--a)}#toast{color:#0E0F12}
+/* V5 */
+[hidden]{display:none!important}
+#selv{position:absolute;inset:0;margin:0;padding:10px;font:14px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre;tab-size:4;border:0;overflow:hidden;pointer-events:none;color:transparent}
+#selv mark{background:rgba(198,241,53,.28);color:transparent;border-radius:3px}
+.cr{display:inline-block;width:0;height:1.2em;border-left:2px solid var(--a);vertical-align:text-bottom;animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+#keys button:first-child{color:var(--a)}
